@@ -74,44 +74,65 @@ def create_network():
     return net
 
 def run_experiment_1(net):
-    "Baseline experiment: TCP, UDP, ICMP between h2 and h1."
+    "Experiment 1 (baseline): TCP, UDP, ICMP between h2 and h1."
     h1 = net.get('h1')
     h2 = net.get('h2')
 
-    # Get h1's IP address (e.g., 10.0.0.1)
     server_ip = h1.IP()
     print(f"\n[Info] h1 IP address = {server_ip}")
 
-    # Make sure no old iperf is running
+    # Helper: kill any old iperf
     h1.cmd('pkill iperf')
+    h2.cmd('pkill iperf')
 
-    print("\n=== Experiment 1: TCP h2 -> h1 ===")
+    # ===== TCP + ping (RTT/loss during TCP flow) =====
+    print("\n=== Experiment 1: TCP h2 -> h1 (with concurrent ping) ===")
     h1.cmd('iperf -s &')
+
+    # 在 h2 上后台启动 ping，同时测 RTT / packet loss
+    h2.cmd(f'ping -i 0.2 -c 50 {server_ip} > exp1_ping_during_tcp_h2_h1.log &')
+
+    # 这时再跑 TCP iperf
     tcp_output = h2.cmd(f'iperf -c {server_ip} -t 10')
     h1.cmd('pkill iperf')
-    print("--- TCP raw output ---")
+    h2.cmd('pkill ping')
+
+    print("--- TCP raw output (exp1) ---")
     print(tcp_output)
     with open('exp1_tcp_h2_h1.log', 'w') as f:
         f.write(tcp_output)
     print("Saved TCP log to exp1_tcp_h2_h1.log")
+    print("Saved ping-during-TCP log to exp1_ping_during_tcp_h2_h1.log")
 
-    print("\n=== Experiment 1: UDP h2 -> h1 ===")
+    # ===== UDP + ping (RTT/loss during UDP flow) =====
+    print("\n=== Experiment 1: UDP h2 -> h1 (with concurrent ping) ===")
+    h1.cmd('pkill iperf')
+    h2.cmd('pkill iperf')
     h1.cmd('iperf -s -u &')
+
+    # UDP 流期间的 ping
+    h2.cmd(f'ping -i 0.2 -c 50 {server_ip} > exp1_ping_during_udp_h2_h1.log &')
+
     udp_output = h2.cmd(f'iperf -c {server_ip} -u -b 5M -t 10')
     h1.cmd('pkill iperf')
-    print("--- UDP raw output ---")
+    h2.cmd('pkill ping')
+
+    print("--- UDP raw output (exp1) ---")
     print(udp_output)
     with open('exp1_udp_h2_h1.log', 'w') as f:
         f.write(udp_output)
     print("Saved UDP log to exp1_udp_h2_h1.log")
+    print("Saved ping-during-UDP log to exp1_ping_during_udp_h2_h1.log")
 
-    print("\n=== Experiment 1: ICMP ping h2 -> h1 ===")
+    # ===== 纯 ICMP baseline（无额外流量） =====
+    print("\n=== Experiment 1: ICMP ping-only h2 -> h1 (no extra traffic) ===")
     ping_output = h2.cmd(f'ping -c 20 {server_ip}')
-    print("--- Ping raw output ---")
+    print("--- Ping-only raw output (exp1) ---")
     print(ping_output)
     with open('exp1_ping_h2_h1.log', 'w') as f:
         f.write(ping_output)
-    print("Saved ping log to exp1_ping_h2_h1.log")
+    print("Saved ping-only log to exp1_ping_h2_h1.log")
+
 
 def main():
     net = None
