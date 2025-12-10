@@ -8,5 +8,5 @@
 To run, put all files into mininet->examples, then run "sudo mn -c",
 then if you want to run throughput = 10M, run "sudo python3 project_topo_exp1_B10M",
 then "sudo python3 project_topo_exp2_B10M", 
-then "sudo python3 project_topo_exp3_B10M", 
+then "sudo python3 project_topo_exp3_B10M" to get all 3 experimental results.
 then "python3 analyze_logs", it will print everything on the cmd and output log files, and it will also create 4 plots for each statistics collection.
