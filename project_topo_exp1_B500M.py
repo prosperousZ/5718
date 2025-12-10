@@ -1,0 +1,163 @@
+from mininet.net import Mininet
+from mininet.node import OVSSwitch
+from mininet.cli import CLI
+from mininet.link import TCLink
+from mininet.log import setLogLevel
+
+def create_network():
+    "Create the 20-host, 5-switch topology (standalone switches)."
+    # 使用 TCLink 作为默认 link 类型
+    net = Mininet(controller=None, link=TCLink, switch=OVSSwitch)
+
+    print("*** Creating switches (standalone mode)")
+    s1 = net.addSwitch('s1', failMode='standalone')
+    s2 = net.addSwitch('s2', failMode='standalone')
+    s3 = net.addSwitch('s3', failMode='standalone')
+    s4 = net.addSwitch('s4', failMode='standalone')
+    s5 = net.addSwitch('s5', failMode='standalone')
+
+    print("*** Creating hosts")
+    h1 = net.addHost('h1')
+    h2 = net.addHost('h2')
+    h3 = net.addHost('h3')
+    h4 = net.addHost('h4')
+    h5 = net.addHost('h5')
+    h6 = net.addHost('h6')
+    h7 = net.addHost('h7')
+    h8 = net.addHost('h8')
+    h9 = net.addHost('h9')
+    h10 = net.addHost('h10')
+    h11 = net.addHost('h11')
+    h12 = net.addHost('h12')
+    h13 = net.addHost('h13')
+    h14 = net.addHost('h14')
+    h15 = net.addHost('h15')
+    h16 = net.addHost('h16')
+    h17 = net.addHost('h17')
+    h18 = net.addHost('h18')
+    h19 = net.addHost('h19')
+    h20 = net.addHost('h20')
+
+    # 统一带宽配置：10 Mbit/s
+    linkopts = dict(bw=500)   # bw 单位是 Mbit/s
+
+    print("*** Creating links host<->switch")
+    net.addLink(h1, s1, **linkopts)
+    net.addLink(h2, s1, **linkopts)
+    net.addLink(h3, s1, **linkopts)
+    net.addLink(h4, s1, **linkopts)
+
+    net.addLink(h5, s2, **linkopts)
+    net.addLink(h6, s2, **linkopts)
+    net.addLink(h7, s2, **linkopts)
+    net.addLink(h8, s2, **linkopts)
+
+    net.addLink(h9, s3, **linkopts)
+    net.addLink(h10, s3, **linkopts)
+    net.addLink(h11, s3, **linkopts)
+    net.addLink(h12, s3, **linkopts)
+
+    net.addLink(h13, s4, **linkopts)
+    net.addLink(h14, s4, **linkopts)
+    net.addLink(h15, s4, **linkopts)
+    net.addLink(h16, s4, **linkopts)
+
+    net.addLink(h17, s5, **linkopts)
+    net.addLink(h18, s5, **linkopts)
+    net.addLink(h19, s5, **linkopts)
+    net.addLink(h20, s5, **linkopts)
+
+    print("*** Creating links between switches")
+    # 这里也用同样的带宽（你也可以单独定义 core_linkopts）
+    net.addLink(s1, s4, **linkopts)
+    net.addLink(s3, s5, **linkopts)
+    net.addLink(s1, s2, **linkopts)
+    net.addLink(s2, s3, **linkopts)
+
+    print("*** Starting network")
+    net.start()
+    return net
+
+def run_experiment_1(net):
+    "Experiment 1 (baseline): TCP, UDP, ICMP between h1 and h20."
+    h1 = net.get('h1')
+    h20 = net.get('h20')
+
+    server_ip = h20.IP()
+    print(f"\n[Info] h20 IP address = {server_ip}")
+
+    # Helper: kill any old iperf
+    h1.cmd('pkill iperf')
+    h20.cmd('pkill iperf')
+
+    # ===== TCP + ping (RTT/loss during TCP flow) =====
+    print("\n=== Experiment 1: TCP h1 -> h20 (with concurrent ping) ===")
+    h20.cmd('iperf -s &')  # server on h20
+
+    # 在 h1 host run ping，measure RTT / packet loss
+    h1.cmd(f'ping -i 0.2 -c 50 {server_ip} > exp1_ping_during_tcp_h1_h20.log &')
+
+    # Then run TCP iperf（client on h1）
+    tcp_output = h1.cmd(f'iperf -c {server_ip} -t 10')
+    h20.cmd('pkill iperf')
+    h1.cmd('pkill ping')
+
+    print("--- TCP raw output (exp1) ---")
+    print(tcp_output)
+    with open('exp1_tcp_h1_h20.log', 'w') as f:
+        f.write(tcp_output)
+    print("Saved TCP log to exp1_tcp_h1_h20.log")
+    print("Saved ping-during-TCP log to exp1_ping_during_tcp_h1_h20.log")
+
+    # ===== UDP + ping (RTT/loss during UDP flow) =====
+    print("\n=== Experiment 1: UDP h1 -> h20 (with concurrent ping) ===")
+    h20.cmd('pkill iperf')
+    h1.cmd('pkill iperf')
+    h20.cmd('iperf -s -u &')  # UDP server on h20
+
+    # UDP stream during ping（still h1 -> h20）
+    h1.cmd(f'ping -i 0.2 -c 50 {server_ip} > exp1_ping_during_udp_h1_h20.log &')
+
+    # Bandwidth = 5M
+    udp_output = h1.cmd(f'iperf -c {server_ip} -u -b 500M -t 10')
+    h20.cmd('pkill iperf')
+    h1.cmd('pkill ping')
+
+    print("--- UDP raw output (exp1) ---")
+    print(udp_output)
+    with open('exp1_udp_h1_h20.log', 'w') as f:
+        f.write(udp_output)
+    print("Saved UDP log to exp1_udp_h1_h20.log")
+    print("Saved ping-during-UDP log to exp1_ping_during_udp_h1_h20.log")
+
+    # ===== ICMP baseline（no extra） =====
+    print("\n=== Experiment 1: ICMP ping-only h1 -> h20 (no extra traffic) ===")
+    ping_output = h1.cmd(f'ping -c 20 {server_ip}')
+    print("--- Ping-only raw output (exp1) ---")
+    print(ping_output)
+    with open('exp1_ping_h1_h20.log', 'w') as f:
+        f.write(ping_output)
+    print("Saved ping-only log to exp1_ping_h1_h20.log")
+
+
+
+def main():
+    net = None
+    try:
+        net = create_network()
+        # Optional: quick connectivity sanity check
+        print("\n*** Quick pingall (optional sanity check)")
+        net.pingAll()
+
+        # Run your baseline measurements
+        run_experiment_1(net)
+
+        print("\n*** Entering Mininet CLI (you can inspect hosts/logs)")
+        CLI(net)
+    finally:
+        if net is not None:
+            net.stop()
+
+if __name__ == '__main__':
+    setLogLevel('info')
+    main()
